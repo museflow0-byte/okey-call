@@ -45,7 +45,7 @@ app.post('/api/create-call', async (req, res) => {
       },
       body: JSON.stringify({
         properties: {
-          exp,                  // λήξη
+          exp,
           enable_prejoin_ui: true,
           enable_chat: false
         }
@@ -92,5 +92,5 @@ app.listen(PORT, () => {
     baseUrl: BASE_URL,
     port: PORT
   });
-  console.log(`YourBrand Calls running on ${PORT}`);
+  console.log(`✅ YourBrand Calls running on ${PORT}`);
 });
