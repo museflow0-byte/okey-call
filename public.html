@@ -1,0 +1,110 @@
+!doctype html
+html lang=en
+head
+  meta charset=utf-8 
+  meta name=viewport content=width=device-width,initial-scale=1 
+  titleYourBrand Callstitle
+  style
+    body{font-familysystem-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background#0b0b10;color#eaeaea;displayflex;justify-contentcenter}
+    .card{max-width720px;width100%;margin48px 16px;background#151520;border1px solid #24243a;border-radius16px;padding24px;box-shadow0 10px 40px rgba(0,0,0,.35)}
+    h1{margin0 0 12px;font-weight700}
+    p{opacity.8}
+    label{displayblock;margin14px 0 6px;font-size14px;opacity.9}
+    input{width100%;padding12px 14px;border-radius10px;border1px solid #2b2b46;background#0f0f18;color#f6f6ff;outlinenone}
+    inputfocus{border-color#6a7dff;box-shadow0 0 0 3px rgba(106,125,255,.2)}
+    .row{displaygrid;grid-template-columns1fr 1fr;gap12px}
+    button{margin-top16px;padding12px 16px;background#6a7dff;bordernone;border-radius10px;colorwhite;cursorpointer;font-weight600}
+    .links{margin-top18px;padding12px;border1px dashed #313154;border-radius10px;background#10101a}
+    .link{displayflex;align-itemscenter;justify-contentspace-between;padding8px 0;border-bottom1px dashed #2a2a44}
+    .linklast-child{border-bottomnone}
+    .copy{background#24243a;border1px solid #34345a;padding6px 10px;border-radius8px;color#cfd2ff;cursorpointer}
+    .ok{color#56d171;font-weight700}
+  style
+head
+body
+  div class=card
+    h1☎️ YourBrand Callsh1
+    pΔιάλεξε διάρκεια & ονόματα και πάτα bStartb. Θα σου γυρίσει 3 links (model  client  manager).p
+
+    div class=row
+      div
+        labelDuration (minutes)label
+        input id=duration type=number value=30 min=1 
+      div
+      div
+        labelManager password (optional)label
+        input id=mpass type=password placeholder=•••••• 
+      div
+    div
+
+    div class=row
+      div
+        labelClient namelabel
+        input id=client type=text value=Nick 
+      div
+      div
+        labelModel namelabel
+        input id=model type=text value=Anna 
+      div
+    div
+
+    div class=row
+      div
+        labelManager namelabel
+        input id=manager type=text value=Manager 
+      div
+      divdiv
+    div
+
+    button id=goStartbutton
+
+    div id=out class=links style=displaynonediv
+  div
+
+  script
+    const $ = (sel) = document.querySelector(sel);
+    const out = $(#out);
+    $(#go).onclick = async () = {
+      out.style.display = none;
+      out.innerHTML = Working…;
+
+      const body = {
+        durationMinutes Number($(#duration).value  30),
+        clientName $(#client).value  Client,
+        modelName $(#model).value  Model,
+        managerName $(#manager).value  Manager,
+        managerPass $(#mpass).value  
+      };
+
+      try {
+        const r = await fetch(apicreate-call, {
+          method POST,
+          headers {Content-Typeapplicationjson},
+          body JSON.stringify(body)
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error  Request failed);
+
+        const { model, client, managerStealth } = data.links;
+        out.style.display = block;
+        out.innerHTML = `
+          divspan class=okOK!span Expires at b${new Date(data.expiresAt1000).toLocaleString()}bdiv
+          div class=linkspanmodelspaninput style=flex1;margin0 12px value=${model} readonly button class=copy data-x=${model}copybuttondiv
+          div class=linkspanclientspaninput style=flex1;margin0 12px value=${client} readonly button class=copy data-x=${client}copybuttondiv
+          div class=linkspanmanagerStealthspaninput style=flex1;margin0 12px value=${managerStealth} readonly button class=copy data-x=${managerStealth}copybuttondiv
+        `;
+        out.querySelectorAll(.copy).forEach(btn = {
+          btn.onclick = () = {
+            navigator.clipboard.writeText(btn.dataset.x);
+            btn.textContent = copied!;
+            setTimeout(() = (btn.textContent = copy), 1200);
+          };
+        });
+      } catch (err) {
+        out.style.display = block;
+        out.innerHTML = `span style=color#ff7b7bError ${String(err.message  err)}span`;
+      }
+    };
+  script
+body
+html

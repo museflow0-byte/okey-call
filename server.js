@@ -1,96 +1,95 @@
-import express from 'express';
-import fetch from 'node-fetch';
-import cors from 'cors';
-import dotenv from 'dotenv';
+import express from "express";
+import path from "path";
+import { fileURLToPath } from "url";
+import dotenv from "dotenv";
 
 dotenv.config();
 
 const app = express();
-app.use(cors());
 app.use(express.json());
 
-const DAILY_API_KEY = process.env.DAILY_API_KEY;
-const DAILY_DOMAIN = process.env.DAILY_DOMAIN; // π.χ. museflow.daily.co
-const BASE_URL = process.env.RENDER_EXTERNAL_URL || process.env.BASE_URL || 'http://localhost:3000';
-const PORT = process.env.PORT || 3000;
-const MANAGER_PASS = process.env.MANAGER_PASS || 'manager';
+// --- paths για να σερβίρουμε το index.html / static
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+app.use(express.static(path.join(__dirname, "public")));
 
-function assertEnv() {
-  if (!DAILY_API_KEY) throw new Error('Set DAILY_API_KEY in env');
-  if (!DAILY_DOMAIN) throw new Error('Set DAILY_DOMAIN in env');
+const DAILY_API_KEY = process.env.DAILY_API_KEY;     // π.χ. "sk_***"
+const DAILY_DOMAIN = process.env.DAILY_DOMAIN;       // π.χ. "museflow.daily.co"
+const MANAGER_PASS = process.env.MANAGER_PASS || ""; // optional
+
+if (!DAILY_API_KEY || !DAILY_DOMAIN) {
+  console.error("Missing DAILY_API_KEY or DAILY_DOMAIN in env!");
 }
 
-app.get('/ping', (req, res) => {
-  res.json({ ok: true, at: new Date().toISOString() });
+// Aπλό health + σερβίρει τη φόρμα
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-app.post('/api/create-call', async (req, res) => {
+// Δημιουργία κλήσης -> επιστρέφει 3 links
+app.post("/api/create-call", async (req, res) => {
   try {
-    assertEnv();
-
     const {
       durationMinutes = 30,
-      clientName = 'Client',
-      modelName = 'Model',
+      clientName = "Client",
+      modelName = "Model",
+      managerName = "Manager",
+      managerPass = ""
     } = req.body || {};
 
-    const exp = Math.floor(Date.now() / 1000) + durationMinutes * 60;
-
-    // Δημιουργία room στο Daily
-    const roomRes = await fetch('https://api.daily.co/v1/rooms', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${DAILY_API_KEY}`,
-      },
-      body: JSON.stringify({
-        properties: {
-          exp,
-          enable_prejoin_ui: true,
-          enable_chat: false
-        }
-      }),
-    });
-
-    const roomData = await roomRes.json();
-    if (!roomRes.ok) {
-      return res.status(500).json({ error: 'daily-api-error', info: roomData });
+    // (προαιρετικό) απλό pass για manager
+    if (MANAGER_PASS && MANAGER_PASS !== managerPass) {
+      return res.status(401).json({ error: "Invalid manager password" });
     }
 
-    const roomName =
-      roomData.name ||
-      (roomData.url ? roomData.url.split('/').pop() : undefined) ||
-      roomData.id;
+    const expiresInSec = Math.max(1, Number(durationMinutes)) * 60;
+    const exp = Math.floor(Date.now() / 1000) + expiresInSec;
 
-    const baseRoomUrl = `https://${DAILY_DOMAIN}/${roomName}`;
-    const modelUrl   = `${baseRoomUrl}?userName=${encodeURIComponent(modelName)}`;
-    const clientUrl  = `${baseRoomUrl}?userName=${encodeURIComponent(clientName)}`;
-    const managerUrl = `${baseRoomUrl}?userName=Manager`;
+    // Δημιουργία room στο Daily
+    const roomResp = await fetch("https://api.daily.co/v1/rooms", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${DAILY_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        privacy: "private",
+        properties: {
+          exp     // λήξη room
+        }
+      })
+    });
+
+    if (!roomResp.ok) {
+      const txt = await roomResp.text();
+      return res.status(400).json({ error: "Daily API error", details: txt });
+    }
+
+    const room = await roomResp.json();
+    // Daily συνήθως επιστρέφει { url: "https://<domain>/room_xxx", name: ... }
+    const roomUrl = room.url || `https://${DAILY_DOMAIN}/room_${room.name}`;
+
+    const modelUrl   = `${roomUrl}?userName=${encodeURIComponent(modelName)}`;
+    const clientUrl  = `${roomUrl}?userName=${encodeURIComponent(clientName)}`;
+    const managerUrl = `${roomUrl}?userName=${encodeURIComponent(managerName)}`;
 
     return res.json({
+      ok: true,
+      expiresAt: exp,
       links: {
         model: modelUrl,
         client: clientUrl,
         managerStealth: managerUrl
-      },
-      expiresAt: exp,
-      base: BASE_URL
+      }
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: "Server error", details: String(err) });
   }
 });
 
-// Προαιρετικό root – για να μη βλέπεις “Not Found”
-app.get('/', (req, res) => res.type('text').send('OK – use POST /api/create-call'));
-
+// Render ακούει από το PORT env
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log('ENV CHECK:', {
-    hasKey: !!DAILY_API_KEY,
-    keyLen: DAILY_API_KEY?.length,
-    domain: DAILY_DOMAIN,
-    baseUrl: BASE_URL,
-    port: PORT
-  });
-  console.log(`✅ YourBrand Calls running on ${PORT}`);
+  console.log(`YourBrand Calls running on ${PORT}`);
 });
